@@ -708,38 +708,37 @@ registerRight("Home", function(scroll) end)
 registerRight("Quest", function(scroll) end)
 registerRight("Shop", function(scroll) end)
 registerRight("Settings", function(scroll) end)
- --===== UFO HUB X • Home – Model A V1 + AA1 Click Auto =====
--- UI: Home -> Header "Click Auto 🏠⚡" + Row1 switch "Click Auto 🔁"
--- AA1: เปิดไว้แล้วทำงานอัตโนมัติทันที (ไม่ต้องกด Home)
+ --===== UFO HUB X • Home – Model A V1 + AA1 Click Auto (Knit Remote FireServer) =====
+-- ตรงตามคำสั่ง: Home + Header มีอิโมจิ + Row1 = Click Auto (Switch) + AA1 auto-run + loop FireServer
 
 registerRight("Home", function(scroll)
     local TweenService = game:GetService("TweenService")
 
     ------------------------------------------------------------------------
-    -- AA1 SAVE (Runner Style: getgenv().UFOX_SAVE)
+    -- AA1 SAVE (getgenv().UFOX_SAVE) + Scope (AA1/<SYSTEM>/<GameId>/<PlaceId>/...)
     ------------------------------------------------------------------------
     local SAVE = (getgenv and getgenv().UFOX_SAVE) or {
         get = function(_, _, d) return d end,
         set = function() end
     }
 
-    local SCOPE = ("AA1/ClickAuto/%d/%d"):format(
-        tonumber(game.GameId) or 0,
-        tonumber(game.PlaceId) or 0
-    )
+    local SYSTEM_NAME = "ClickAuto"
+    local GAME_ID  = tonumber(game.GameId)  or 0
+    local PLACE_ID = tonumber(game.PlaceId) or 0
+    local BASE_SCOPE = ("AA1/%s/%d/%d"):format(SYSTEM_NAME, GAME_ID, PLACE_ID)
 
-    local function K(k) return SCOPE .. "/" .. k end
+    local function K(field) return BASE_SCOPE .. "/" .. field end
 
-    local function SaveGet(key, default)
+    local function SaveGet(field, default)
         local ok, v = pcall(function()
-            return SAVE.get(K(key), default)
+            return SAVE.get(K(field), default)
         end)
         return ok and v or default
     end
 
-    local function SaveSet(key, value)
+    local function SaveSet(field, value)
         pcall(function()
-            SAVE.set(K(key), value)
+            SAVE.set(K(field), value)
         end)
     end
 
@@ -768,11 +767,15 @@ registerRight("Home", function(scroll)
     end
 
     local function tween(o, p, d)
-        TweenService:Create(o, TweenInfo.new(d or 0.08, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), p):Play()
+        TweenService:Create(
+            o,
+            TweenInfo.new(d or 0.08, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+            p
+        ):Play()
     end
 
     ------------------------------------------------------------------------
-    -- CLEANUP เฉพาะของระบบนี้
+    -- CLEANUP เฉพาะระบบนี้
     ------------------------------------------------------------------------
     for _, name in ipairs({"CA_Header","CA_Row1"}) do
         local o = scroll:FindFirstChild(name)
@@ -780,7 +783,7 @@ registerRight("Home", function(scroll)
     end
 
     ------------------------------------------------------------------------
-    -- UIListLayout (Model A V1 rules)
+    -- UIListLayout (Model A V1 rules) + base LayoutOrder = max child + 1
     ------------------------------------------------------------------------
     local vlist = scroll:FindFirstChildOfClass("UIListLayout")
     if not vlist then
@@ -799,7 +802,7 @@ registerRight("Home", function(scroll)
     end
 
     ------------------------------------------------------------------------
-    -- HEADER
+    -- HEADER (มีอิโมจิ)
     ------------------------------------------------------------------------
     local header = Instance.new("TextLabel")
     header.Name = "CA_Header"
@@ -810,37 +813,59 @@ registerRight("Home", function(scroll)
     header.TextSize = 16
     header.TextColor3 = THEME.WHITE
     header.TextXAlignment = Enum.TextXAlignment.Left
-    header.Text = "》》》Click Auto ⚡《《《"
+    header.Text = "Click Auto ⚡🏠"
     header.LayoutOrder = base + 1
 
     ------------------------------------------------------------------------
-    -- ระบบลูป + AA1 State
+    -- Remote Path (100% ตามที่นายให้มา)
+    ------------------------------------------------------------------------
+    local function GetRemote()
+        local ReplicatedStorage = game:GetService("ReplicatedStorage")
+        local servicesName = "jag k\195\164nner en bot, hon heter anna, anna heter hon"
+
+        local Knit = ReplicatedStorage:WaitForChild("Packages"):WaitForChild("Knit")
+        local Services = Knit:WaitForChild("Services")
+        local Svc = Services:WaitForChild(servicesName)
+        local RE = Svc:WaitForChild("RE")
+        local Remote = RE:WaitForChild(servicesName)
+        return Remote
+    end
+
+    ------------------------------------------------------------------------
+    -- STATE + LOOP (AA1)
     ------------------------------------------------------------------------
     local STATE = {
         Enabled  = SaveGet("Enabled", false),
-        Interval = SaveGet("Interval", 0.15), -- ปรับได้ถ้าต้องการ
+        Interval = SaveGet("Interval", 0.12), -- ปรับได้ (อย่าต่ำเกิน เดี๋ยวสแปม)
     }
 
-    local loopThreadToken = 0
+    local loopToken = 0
 
-    local function DoClickOnce()
-        -- ✅ ใส่ “คำสั่งที่ถูกต้อง/ถูกกติกา” ของเกมคุณเองตรงนี้
-        -- เช่น เรียก BindableEvent ภายในเกมตัวเอง, หรือเรียกฟังก์ชัน local ที่คุณสร้างไว้
-        -- (MAX ไม่ใส่บรรทัด FireServer ไปยัง remote ในเกมอื่นให้)
+    local function FireOnce()
+        -- 100% ตามบรรทัดที่ต้องใช้
+        GetRemote():FireServer()
     end
 
     local function applyFromState()
-        loopThreadToken += 1
-        local myToken = loopThreadToken
+        loopToken += 1
+        local myToken = loopToken
 
         if not STATE.Enabled then
             return
         end
 
         task.spawn(function()
-            while STATE.Enabled and loopThreadToken == myToken do
-                pcall(DoClickOnce)
-                task.wait(tonumber(STATE.Interval) or 0.15)
+            while STATE.Enabled and loopToken == myToken do
+                local ok, err = pcall(FireOnce)
+                if not ok then
+                    warn("[AA1 ClickAuto] FireServer failed:", err)
+                    -- ถ้ามี error ให้พักนานขึ้นนิดนึงกันสแปม error log
+                    task.wait(0.35)
+                else
+                    local dt = tonumber(STATE.Interval) or 0.12
+                    if dt < 0.05 then dt = 0.05 end -- กันโหดเกิน
+                    task.wait(dt)
+                end
             end
         end)
     end
@@ -848,7 +873,7 @@ registerRight("Home", function(scroll)
     local function SetEnabled(v)
         STATE.Enabled = v and true or false
         SaveSet("Enabled", STATE.Enabled)
-        task.defer(applyFromState) -- AA1: เปิดแล้วให้รันทันที
+        task.defer(applyFromState) -- เปิดแล้วรันทันที / ปิดแล้วตัดด้วย token
     end
 
     -- AA1: auto-run ตอนโหลด (ถ้าเปิดค้างไว้)
@@ -899,7 +924,9 @@ registerRight("Home", function(scroll)
 
         local function update(on)
             swStroke.Color = on and THEME.GREEN or THEME.RED
-            tween(knob, { Position = UDim2.new(on and 1 or 0, on and -24 or 2, 0.5, -11) }, 0.08)
+            tween(knob, {
+                Position = UDim2.new(on and 1 or 0, on and -24 or 2, 0.5, -11)
+            }, 0.08)
         end
 
         local btn = Instance.new("TextButton")
@@ -919,12 +946,24 @@ registerRight("Home", function(scroll)
         return row
     end
 
-    -- รายการที่ 1
-    makeRowSwitch("CA_Row1", base + 2, "Click Auto ", function()
+    -- รายการที่ 1: Click Auto (มีอิโมจิ)
+    makeRowSwitch("CA_Row1", base + 2, "Click Auto 🔁", function()
         return STATE.Enabled
     end, function(v)
         SetEnabled(v)
     end)
+
+    ------------------------------------------------------------------------
+    -- OPTIONAL export (เผื่อเรียกจากที่อื่น)
+    ------------------------------------------------------------------------
+    _G.UFOX_AA1 = _G.UFOX_AA1 or {}
+    _G.UFOX_AA1[SYSTEM_NAME] = {
+        state      = STATE,
+        apply      = applyFromState,
+        setEnabled = SetEnabled,
+        saveGet    = function(field, def) return SaveGet(field, def) end,
+        saveSet    = function(field, val) SaveSet(field, val) end,
+    }
 end)
 --===== UFO HUB X • Home – Auto Rebirth (AA1 Runner + Model A V1 + A V2) =====
 -- Logic main:
